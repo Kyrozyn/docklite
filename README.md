@@ -36,11 +36,11 @@ Run DockLite directly by mounting the Docker socket:
 
 ```bash
 docker run -d \
-  --name docklite \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  docklite:latest
+      --name docklite \
+      --restart unless-stopped \
+      -p 3000:3000 \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      kyrozyn/docklite:latest
 ```
 
 Open your browser at **`http://localhost:3000`**.
