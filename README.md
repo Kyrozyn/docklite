@@ -40,6 +40,19 @@ docker run -d \
       --restart unless-stopped \
       -p 3000:3000 \
       -v /var/run/docker.sock:/var/run/docker.sock \
+      -e DOCKLITE_PASSWORD="rahasia123" \
+      kyrozyn/docklite:latest
+
+```
+With Password
+
+```bash
+docker run -d \
+      --name docklite \
+      --restart unless-stopped \
+      -p 3000:3000 \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -e DOCKLITE_PASSWORD="rahasia123" \
       kyrozyn/docklite:latest
 ```
 
