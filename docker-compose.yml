@@ -1,0 +1,22 @@
+services:
+  docklite:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docklite
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "8080:3000"
+    volumes:
+      # Mount the Docker daemon socket
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - RUST_LOG=docklite=info
+    # Demonstrates DockLite's minimal footprint (< 15MB RAM)
+    deploy:
+      resources:
+        limits:
+          memory: 64M

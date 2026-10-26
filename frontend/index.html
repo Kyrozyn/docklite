@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DockLite - Lightweight Docker Manager</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 12.5V17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-4.5c0-.8.7-1.5 1.5-1.5h1.2c.4 0 .8-.2 1-.5l.8-1.5c.3-.5.8-.8 1.4-.8h4.2c.6 0 1.1.3 1.4.8l.8 1.5c.2.3.6.5 1 .5h4.2c.8 0 1.5.7 1.5 1.5z"></path>
+          <rect x="5" y="4" width="3" height="3" rx="0.5"></rect>
+          <rect x="9" y="4" width="3" height="3" rx="0.5"></rect>
+          <rect x="13" y="4" width="3" height="3" rx="0.5"></rect>
+          <rect x="7" y="7.5" width="3" height="3" rx="0.5"></rect>
+          <rect x="11" y="7.5" width="3" height="3" rx="0.5"></rect>
+        </svg>
+        <div class="brand-text">
+          <h2>DockLite</h2>
+          <span class="brand-badge">Rust Core</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-tab="containers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          Containers
+          <span class="badge" id="sidebar-container-count">0</span>
+        </button>
+        <button class="nav-item" data-tab="images">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+          Images
+          <span class="badge" id="sidebar-image-count">0</span>
+        </button>
+        <button class="nav-item" data-tab="volumes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          Volumes
+        </button>
+        <button class="nav-item" data-tab="networks">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          Networks
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="host-status">
+          <div class="status-dot online"></div>
+          <div>
+            <div class="host-title">Docker Engine</div>
+            <div class="host-sub" id="docker-version-str">v--</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 id="page-title">Dashboard</h1>
+        </div>
+        <div class="topbar-right">
+          <div class="refresh-control">
+            <label for="auto-refresh-select">Auto-refresh:</label>
+            <select id="auto-refresh-select">
+              <option value="0">Off</option>
+              <option value="3000">3s</option>
+              <option value="5000" selected>5s</option>
+              <option value="10000">10s</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary btn-icon" id="btn-manual-refresh" title="Refresh Now">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="content-body">
+        <!-- TAB: DASHBOARD -->
+        <section id="tab-dashboard" class="tab-pane active">
+          <!-- Stat Cards -->
+          <div class="stat-grid">
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-label">Containers</span>
+                <span class="stat-icon-wrap blue">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                </span>
+              </div>
+              <div class="stat-value" id="dash-containers-total">0</div>
+              <div class="stat-breakdown">
+                <span class="tag tag-green"><span id="dash-containers-running">0</span> running</span>
+                <span class="tag tag-gray"><span id="dash-containers-stopped">0</span> stopped</span>
+                <span class="tag tag-yellow"><span id="dash-containers-paused">0</span> paused</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-label">Images</span>
+                <span class="stat-icon-wrap purple">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle></svg>
+                </span>
+              </div>
+              <div class="stat-value" id="dash-images-count">0</div>
+              <div class="stat-subtext">Local cached images</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-label">Volumes</span>
+                <span class="stat-icon-wrap cyan">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                </span>
+              </div>
+              <div class="stat-value" id="dash-volumes-count">0</div>
+              <div class="stat-subtext">Persistent data mounts</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-header">
+                <span class="stat-label">Networks</span>
+                <span class="stat-icon-wrap orange">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+                </span>
+              </div>
+              <div class="stat-value" id="dash-networks-count">0</div>
+              <div class="stat-subtext">Bridge & overlay networks</div>
+            </div>
+          </div>
+
+          <!-- Quick Actions & System Info -->
+          <div class="dashboard-columns">
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Quick Actions</h3>
+              </div>
+              <div class="panel-body quick-actions">
+                <button class="btn btn-primary" onclick="openModal('modal-create-container')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Deploy Container
+                </button>
+                <button class="btn btn-secondary" onclick="openModal('modal-pull-image')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="8 17 12 21 16 17"></polyline><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path></svg>
+                  Pull Image
+                </button>
+                <button class="btn btn-outline-danger" onclick="triggerSystemPrune()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  System Prune
+                </button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">
+                <h3>Host & Docker System</h3>
+              </div>
+              <div class="panel-body">
+                <table class="info-table">
+                  <tbody>
+                    <tr><td>Operating System:</td><td id="sys-os">--</td></tr>
+                    <tr><td>Architecture:</td><td id="sys-arch">--</td></tr>
+                    <tr><td>Kernel Version:</td><td id="sys-kernel">--</td></tr>
+                    <tr><td>CPU Cores:</td><td id="sys-cpus">--</td></tr>
+                    <tr><td>Total Memory:</td><td id="sys-mem">--</td></tr>
+                    <tr><td>API Version:</td><td id="sys-api">--</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Containers Overview -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3>Active Containers</h3>
+              <button class="btn btn-sm btn-secondary" onclick="switchTab('containers')">View All</button>
+            </div>
+            <div class="panel-body no-padding table-responsive">
+              <table class="data-table" id="dashboard-containers-table">
+                <thead>
+                  <tr>
+                    <th>State</th>
+                    <th>Name</th>
+                    <th>Image</th>
+                    <th>Status</th>
+                    <th>Ports</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="dash-containers-list">
+                  <tr><td colspan="6" class="text-center">Loading containers...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB: CONTAINERS -->
+        <section id="tab-containers" class="tab-pane">
+          <div class="action-bar">
+            <div class="filter-group">
+              <button class="filter-btn active" data-filter="all">All</button>
+              <button class="filter-btn" data-filter="running">Running</button>
+              <button class="filter-btn" data-filter="exited">Stopped</button>
+            </div>
+            <div class="search-box">
+              <input type="text" id="containers-search" placeholder="Filter containers...">
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-create-container')">
+              + New Container
+            </button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-body no-padding table-responsive">
+              <table class="data-table" id="containers-table">
+                <thead>
+                  <tr>
+                    <th>State</th>
+                    <th>Name</th>
+                    <th>Image</th>
+                    <th>Status</th>
+                    <th>Ports</th>
+                    <th>Created</th>
+                    <th class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="containers-list">
+                  <tr><td colspan="7" class="text-center">Loading containers...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB: IMAGES -->
+        <section id="tab-images" class="tab-pane">
+          <div class="action-bar">
+            <div class="search-box">
+              <input type="text" id="images-search" placeholder="Filter images...">
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-pull-image')">
+              Pull Image
+            </button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-body no-padding table-responsive">
+              <table class="data-table" id="images-table">
+                <thead>
+                  <tr>
+                    <th>Repository / Tag</th>
+                    <th>Image ID</th>
+                    <th>Size</th>
+                    <th>Created</th>
+                    <th class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="images-list">
+                  <tr><td colspan="5" class="text-center">Loading images...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB: VOLUMES -->
+        <section id="tab-volumes" class="tab-pane">
+          <div class="action-bar">
+            <div class="search-box">
+              <input type="text" id="volumes-search" placeholder="Filter volumes...">
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-create-volume')">
+              + Create Volume
+            </button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-body no-padding table-responsive">
+              <table class="data-table" id="volumes-table">
+                <thead>
+                  <tr>
+                    <th>Volume Name</th>
+                    <th>Driver</th>
+                    <th>Scope</th>
+                    <th>Mountpoint</th>
+                    <th class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="volumes-list">
+                  <tr><td colspan="5" class="text-center">Loading volumes...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB: NETWORKS -->
+        <section id="tab-networks" class="tab-pane">
+          <div class="action-bar">
+            <div class="search-box">
+              <input type="text" id="networks-search" placeholder="Filter networks...">
+            </div>
+            <button class="btn btn-primary" onclick="openModal('modal-create-network')">
+              + Create Network
+            </button>
+          </div>
+
+          <div class="panel">
+            <div class="panel-body no-padding table-responsive">
+              <table class="data-table" id="networks-table">
+                <thead>
+                  <tr>
+                    <th>Network Name</th>
+                    <th>Driver</th>
+                    <th>Scope</th>
+                    <th>Subnet / Gateway</th>
+                    <th>Containers</th>
+                    <th class="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="networks-list">
+                  <tr><td colspan="6" class="text-center">Loading networks...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODALS -->
+
+  <!-- Modal: Create Container -->
+  <div class="modal-backdrop" id="modal-create-container">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Deploy New Container</h3>
+        <button class="modal-close" onclick="closeModal('modal-create-container')">&times;</button>
+      </div>
+      <form id="form-create-container" onsubmit="handleCreateContainer(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Image Name *</label>
+            <input type="text" id="create-c-image" placeholder="e.g. nginx:alpine or redis:7" required>
+          </div>
+          <div class="form-group">
+            <label>Container Name (optional)</label>
+            <input type="text" id="create-c-name" placeholder="e.g. my-web-app">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Port Mappings</label>
+              <input type="text" id="create-c-ports" placeholder="8080:80, 8443:443">
+              <small>Format: host_port:container_port (comma separated)</small>
+            </div>
+            <div class="form-group">
+              <label>Restart Policy</label>
+              <select id="create-c-restart">
+                <option value="unless-stopped">Unless Stopped</option>
+                <option value="always">Always</option>
+                <option value="on-failure">On Failure</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Environment Variables</label>
+            <textarea id="create-c-env" rows="2" placeholder="PORT=80&#10;NODE_ENV=production"></textarea>
+            <small>One KEY=VALUE per line</small>
+          </div>
+          <div class="form-group">
+            <label>Volumes / Binds</label>
+            <textarea id="create-c-volumes" rows="2" placeholder="/host/data:/app/data&#10;/host/conf:/etc/conf:ro"></textarea>
+            <small>One host:container per line</small>
+          </div>
+          <div class="form-group">
+            <label>Command (optional)</label>
+            <input type="text" id="create-c-cmd" placeholder="e.g. sh -c 'sleep 3600'">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-create-container')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-container">Deploy</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Pull Image -->
+  <div class="modal-backdrop" id="modal-pull-image">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Pull Docker Image</h3>
+        <button class="modal-close" onclick="closeModal('modal-pull-image')">&times;</button>
+      </div>
+      <form id="form-pull-image" onsubmit="handlePullImage(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Image Repository & Tag *</label>
+            <input type="text" id="pull-image-name" placeholder="e.g. alpine:latest, postgres:16, ubuntu:24.04" required>
+            <small>Pulls from Docker Hub or specified registry</small>
+          </div>
+          <div id="pull-status-box" class="log-box hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-pull-image')">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-pull">Pull</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Create Volume -->
+  <div class="modal-backdrop" id="modal-create-volume">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Create Volume</h3>
+        <button class="modal-close" onclick="closeModal('modal-create-volume')">&times;</button>
+      </div>
+      <form id="form-create-volume" onsubmit="handleCreateVolume(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Volume Name *</label>
+            <input type="text" id="vol-name" placeholder="e.g. app_data" required>
+          </div>
+          <div class="form-group">
+            <label>Driver</label>
+            <input type="text" id="vol-driver" value="local">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-create-volume')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Create Network -->
+  <div class="modal-backdrop" id="modal-create-network">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Create Network</h3>
+        <button class="modal-close" onclick="closeModal('modal-create-network')">&times;</button>
+      </div>
+      <form id="form-create-network" onsubmit="handleCreateNetwork(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Network Name *</label>
+            <input type="text" id="net-name" placeholder="e.g. app-network" required>
+          </div>
+          <div class="form-group">
+            <label>Driver</label>
+            <select id="net-driver">
+              <option value="bridge">bridge</option>
+              <option value="host">host</option>
+              <option value="macvlan">macvlan</option>
+              <option value="overlay">overlay</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-create-network')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Logs -->
+  <div class="modal-backdrop" id="modal-logs">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 id="logs-modal-title">Container Logs</h3>
+        <div class="modal-header-actions">
+          <select id="logs-tail-select" onchange="fetchCurrentLogs()">
+            <option value="50">50 lines</option>
+            <option value="100" selected>100 lines</option>
+            <option value="300">300 lines</option>
+            <option value="1000">1000 lines</option>
+          </select>
+          <button class="btn btn-sm btn-secondary" onclick="fetchCurrentLogs()" title="Refresh Logs">↻</button>
+          <button class="btn btn-sm btn-secondary" onclick="copyLogsToClipboard()">Copy</button>
+          <button class="modal-close" onclick="closeModal('modal-logs')">&times;</button>
+        </div>
+      </div>
+      <div class="modal-body modal-logs-body">
+        <pre id="logs-content" class="log-pre">Loading logs...</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Stats -->
+  <div class="modal-backdrop" id="modal-stats">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="stats-modal-title">Live Resource Stats</h3>
+        <button class="modal-close" onclick="closeModal('modal-stats')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="stats-metric">
+          <div class="stats-metric-header">
+            <span>CPU Usage</span>
+            <span id="stat-cpu-val" class="metric-val">0.0%</span>
+          </div>
+          <div class="progress-bar"><div id="stat-cpu-bar" class="progress-fill" style="width: 0%"></div></div>
+        </div>
+
+        <div class="stats-metric">
+          <div class="stats-metric-header">
+            <span>Memory Usage</span>
+            <span id="stat-mem-val" class="metric-val">0 MB / 0 MB (0.0%)</span>
+          </div>
+          <div class="progress-bar"><div id="stat-mem-bar" class="progress-fill" style="width: 0%"></div></div>
+        </div>
+
+        <div class="stats-metric">
+          <div class="stats-metric-header">
+            <span>Network I/O</span>
+            <span id="stat-net-val" class="metric-val">RX: 0 B | TX: 0 B</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Inspect -->
+  <div class="modal-backdrop" id="modal-inspect">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 id="inspect-modal-title">Inspect Details</h3>
+        <button class="modal-close" onclick="closeModal('modal-inspect')">&times;</button>
+      </div>
+      <div class="modal-body modal-logs-body">
+        <pre id="inspect-content" class="log-pre json-pre"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

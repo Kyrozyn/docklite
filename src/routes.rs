@@ -1,0 +1,256 @@
+use crate::docker_ops::DockerManager;
+use crate::models::*;
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use serde::Deserialize;
+use std::sync::Arc;
+
+pub type SharedState = Arc<DockerManager>;
+
+#[derive(Deserialize)]
+pub struct ContainerListQuery {
+    pub all: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct LogsQuery {
+    pub tail: Option<usize>,
+}
+
+#[derive(Deserialize)]
+pub struct RemoveImageQuery {
+    pub force: Option<bool>,
+}
+
+pub async fn health() -> impl IntoResponse {
+    Json(ApiResponse::ok("DockLite is running healthy"))
+}
+
+// Containers
+pub async fn list_containers(
+    State(docker): State<SharedState>,
+    Query(query): Query<ContainerListQuery>,
+) -> impl IntoResponse {
+    let all = query.all.unwrap_or(true);
+    match docker.list_containers(all).await {
+        Ok(list) => (StatusCode::OK, Json(ApiResponse::ok(list))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn inspect_container(
+    State(docker): State<SharedState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match docker.inspect_container(&id).await {
+        Ok(details) => (StatusCode::OK, Json(ApiResponse::ok(details))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn container_action(
+    State(docker): State<SharedState>,
+    Path((id, action)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match docker.container_action(&id, &action).await {
+        Ok(msg) => (StatusCode::OK, Json(ApiResponse::ok(msg))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn container_logs(
+    State(docker): State<SharedState>,
+    Path(id): Path<String>,
+    Query(query): Query<LogsQuery>,
+) -> impl IntoResponse {
+    let tail = query.tail.unwrap_or(100);
+    match docker.get_container_logs(&id, tail).await {
+        Ok(logs) => (StatusCode::OK, Json(ApiResponse::ok(logs))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn container_stats(
+    State(docker): State<SharedState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match docker.get_container_stats(&id).await {
+        Ok(stats) => (StatusCode::OK, Json(ApiResponse::ok(stats))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn create_container(
+    State(docker): State<SharedState>,
+    Json(payload): Json<CreateContainerRequest>,
+) -> impl IntoResponse {
+    match docker.create_container(payload).await {
+        Ok(id) => (
+            StatusCode::CREATED,
+            Json(ApiResponse::ok(serde_json::json!({ "id": id }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+// Images
+pub async fn list_images(State(docker): State<SharedState>) -> impl IntoResponse {
+    match docker.list_images().await {
+        Ok(list) => (StatusCode::OK, Json(ApiResponse::ok(list))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn pull_image(
+    State(docker): State<SharedState>,
+    Json(payload): Json<PullImageRequest>,
+) -> impl IntoResponse {
+    match docker.pull_image(&payload.image).await {
+        Ok(msg) => (StatusCode::OK, Json(ApiResponse::ok(msg))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn remove_image(
+    State(docker): State<SharedState>,
+    Path(id): Path<String>,
+    Query(query): Query<RemoveImageQuery>,
+) -> impl IntoResponse {
+    let force = query.force.unwrap_or(false);
+    match docker.remove_image(&id, force).await {
+        Ok(msg) => (StatusCode::OK, Json(ApiResponse::ok(msg))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+// Volumes
+pub async fn list_volumes(State(docker): State<SharedState>) -> impl IntoResponse {
+    match docker.list_volumes().await {
+        Ok(list) => (StatusCode::OK, Json(ApiResponse::ok(list))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn create_volume(
+    State(docker): State<SharedState>,
+    Json(payload): Json<CreateVolumeRequest>,
+) -> impl IntoResponse {
+    match docker.create_volume(&payload.name, payload.driver).await {
+        Ok(name) => (
+            StatusCode::CREATED,
+            Json(ApiResponse::ok(serde_json::json!({ "name": name }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn remove_volume(
+    State(docker): State<SharedState>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match docker.remove_volume(&name).await {
+        Ok(msg) => (StatusCode::OK, Json(ApiResponse::ok(msg))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+// Networks
+pub async fn list_networks(State(docker): State<SharedState>) -> impl IntoResponse {
+    match docker.list_networks().await {
+        Ok(list) => (StatusCode::OK, Json(ApiResponse::ok(list))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn create_network(
+    State(docker): State<SharedState>,
+    Json(payload): Json<CreateNetworkRequest>,
+) -> impl IntoResponse {
+    match docker.create_network(&payload.name, payload.driver).await {
+        Ok(id) => (
+            StatusCode::CREATED,
+            Json(ApiResponse::ok(serde_json::json!({ "id": id }))),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn remove_network(
+    State(docker): State<SharedState>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match docker.remove_network(&id).await {
+        Ok(msg) => (StatusCode::OK, Json(ApiResponse::ok(msg))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+// System
+pub async fn system_info(State(docker): State<SharedState>) -> impl IntoResponse {
+    match docker.get_system_info().await {
+        Ok(info) => (StatusCode::OK, Json(ApiResponse::ok(info))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
+
+pub async fn system_prune(State(docker): State<SharedState>) -> impl IntoResponse {
+    match docker.prune_system().await {
+        Ok(summary) => (StatusCode::OK, Json(ApiResponse::ok(summary))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::err(e)),
+        ),
+    }
+}
