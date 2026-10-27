@@ -19,9 +19,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
   setupEventListeners();
   const allowed = await checkAuth();
-  if (allowed) {
-    loadAllData();
+  if (!allowed) {
+    window.location.replace('/login');
+    return;
   }
+  loadAllData();
   setupAutoRefresh();
 });
 
@@ -98,9 +100,9 @@ async function checkAuth() {
   const token = localStorage.getItem('docklite_token') || '';
   try {
     const res = await fetch('/api/auth/status', {
-      headers: {
+      headers: token ? {
         'Authorization': `Bearer ${token}`
-      }
+      } : {}
     });
     const json = await res.json();
     if (json.success && json.data) {
@@ -110,7 +112,6 @@ async function checkAuth() {
 
       if (authRequired) {
         if (!authenticated) {
-          showLoginOverlay(false);
           return false;
         } else if (logoutBtn) {
           logoutBtn.classList.remove('hidden');
@@ -119,73 +120,10 @@ async function checkAuth() {
         logoutBtn.classList.add('hidden');
       }
     }
-    hideLoginOverlay();
     return true;
   } catch (err) {
     console.error('Failed to verify auth status:', err);
-    return true;
-  }
-}
-
-function showLoginOverlay(showError = false) {
-  const overlay = document.getElementById('login-overlay');
-  const errDiv = document.getElementById('login-error');
-  if (!overlay) return;
-  if (showError) {
-    errDiv.textContent = 'Session expired or password required.';
-    errDiv.classList.remove('hidden');
-  } else {
-    errDiv.classList.add('hidden');
-  }
-  overlay.classList.remove('hidden');
-  const pwdInput = document.getElementById('login-password');
-  if (pwdInput) {
-    pwdInput.value = '';
-    pwdInput.focus();
-  }
-}
-
-function hideLoginOverlay() {
-  const overlay = document.getElementById('login-overlay');
-  if (overlay) overlay.classList.add('hidden');
-}
-
-async function handleLoginSubmit(event) {
-  event.preventDefault();
-  const passwordInput = document.getElementById('login-password');
-  const btn = document.getElementById('btn-login-submit');
-  const errDiv = document.getElementById('login-error');
-  const password = passwordInput.value;
-
-  btn.disabled = true;
-  btn.textContent = 'Verifying...';
-  errDiv.classList.add('hidden');
-
-  try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password })
-    });
-    const json = await res.json();
-    if (json.success && json.data && json.data.token) {
-      localStorage.setItem('docklite_token', json.data.token);
-      hideLoginOverlay();
-      const logoutBtn = document.getElementById('btn-logout');
-      if (logoutBtn) logoutBtn.classList.remove('hidden');
-      showToast('Unlocked successfully', 'success');
-      loadAllData();
-    } else {
-      errDiv.textContent = json.error || 'Invalid password';
-      errDiv.classList.remove('hidden');
-      passwordInput.select();
-    }
-  } catch (err) {
-    errDiv.textContent = 'Connection error: ' + err.message;
-    errDiv.classList.remove('hidden');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Unlock Dashboard';
+    return false;
   }
 }
 
@@ -194,18 +132,15 @@ async function handleLogout() {
   try {
     await fetch('/api/auth/logout', {
       method: 'POST',
-      headers: {
+      headers: token ? {
         'Authorization': `Bearer ${token}`
-      }
+      } : {}
     });
   } catch (e) {
     console.warn(e);
   }
   localStorage.removeItem('docklite_token');
-  const logoutBtn = document.getElementById('btn-logout');
-  if (logoutBtn) logoutBtn.classList.add('hidden');
-  showLoginOverlay(false);
-  showToast('Logged out', 'info');
+  window.location.replace('/login');
 }
 
 // API Helpers
@@ -227,7 +162,7 @@ async function apiCall(endpoint, options = {}) {
 
     if (res.status === 401 && endpoint !== '/api/auth/login' && endpoint !== '/api/auth/status') {
       localStorage.removeItem('docklite_token');
-      showLoginOverlay(true);
+      window.location.replace('/login');
       throw new Error('Authentication required');
     }
 

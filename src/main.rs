@@ -4,6 +4,7 @@ mod models;
 mod routes;
 
 use axum::{
+    extract::State,
     http::{header, StatusCode, Uri},
     response::IntoResponse,
     routing::{delete, get, post},
@@ -21,10 +22,38 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 #[folder = "frontend/"]
 struct Assets;
 
-async fn static_handler(uri: Uri) -> impl IntoResponse {
+async fn static_handler(
+    State(auth): State<Arc<auth::AuthManager>>,
+    uri: Uri,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
     let mut path = uri.path().trim_start_matches('/').to_string();
     if path.is_empty() {
         path = "index.html".to_string();
+    }
+
+    if path == "index.html" {
+        if auth.is_required() {
+            let is_authed = match routes::extract_token(&headers) {
+                Some(token) => auth.validate_token(&token).await,
+                None => false,
+            };
+            if !is_authed {
+                return axum::response::Redirect::to("/login").into_response();
+            }
+        }
+    } else if path == "login" || path == "login.html" {
+        if !auth.is_required() {
+            return axum::response::Redirect::to("/").into_response();
+        }
+        let is_authed = match routes::extract_token(&headers) {
+            Some(token) => auth.validate_token(&token).await,
+            None => false,
+        };
+        if is_authed {
+            return axum::response::Redirect::to("/").into_response();
+        }
+        path = "login.html".to_string();
     }
 
     match Assets::get(&path) {
@@ -33,7 +62,17 @@ async fn static_handler(uri: Uri) -> impl IntoResponse {
             ([(header::CONTENT_TYPE, mime.as_ref())], content.data).into_response()
         }
         None => {
-            // SPA fallback: return index.html for unrecognized routes
+            // SPA fallback: return index.html for unrecognized routes if authenticated
+            if auth.is_required() {
+                let is_authed = match routes::extract_token(&headers) {
+                    Some(token) => auth.validate_token(&token).await,
+                    None => false,
+                };
+                if !is_authed {
+                    return axum::response::Redirect::to("/login").into_response();
+                }
+            }
+
             if let Some(content) = Assets::get("index.html") {
                 ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], content.data).into_response()
             } else {
@@ -125,10 +164,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(auth_api)
         .merge(protected_docker_api);
 
+    // Static & SPA Router
+    let static_router = Router::new()
+        .fallback(static_handler)
+        .with_state(auth_mgr.clone());
+
     // Main App router
     let app = Router::new()
         .nest("/api", api_routes)
-        .fallback(static_handler)
+        .fallback_service(static_router)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 

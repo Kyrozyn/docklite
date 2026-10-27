@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DockLite - Login</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background-color: var(--bg-body);
+      margin: 0;
+      padding: 16px;
+    }
+    .login-wrapper {
+      width: 100%;
+      max-width: 400px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 12.5V17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-4.5c0-.8.7-1.5 1.5-1.5h1.2c.4 0 .8-.2 1-.5l.8-1.5c.3-.5.8-.8 1.4-.8h4.2c.6 0 1.1.3 1.4.8l.8 1.5c.2.3.6.5 1 .5h4.2c.8 0 1.5.7 1.5 1.5z"></path>
+          <rect x="5" y="4" width="3" height="3" rx="0.5"></rect>
+          <rect x="9" y="4" width="3" height="3" rx="0.5"></rect>
+          <rect x="13" y="4" width="3" height="3" rx="0.5"></rect>
+          <rect x="7" y="7.5" width="3" height="3" rx="0.5"></rect>
+          <rect x="11" y="7.5" width="3" height="3" rx="0.5"></rect>
+        </svg>
+        <h2>DockLite</h2>
+        <span class="brand-badge">Password Protected</span>
+      </div>
+      <p class="login-subtitle">Please enter the password to access your Docker environment.</p>
+
+      <div id="login-error" class="login-error hidden"></div>
+
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group" style="text-align: left;">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            placeholder="Enter password..."
+            autocomplete="current-password"
+            required
+            autofocus
+          >
+        </div>
+        <button type="submit" id="btn-submit" class="btn btn-primary btn-block">
+          Unlock Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    async function checkAuthAndRedirect() {
+      const token = localStorage.getItem('docklite_token') || '';
+      try {
+        const res = await fetch('/api/auth/status', {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const json = await res.json();
+        if (json.success && json.data) {
+          if (!json.data.auth_required || json.data.authenticated) {
+            window.location.replace('/');
+          }
+        }
+      } catch (err) {
+        console.warn('Auth status check error:', err);
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const pwdInput = document.getElementById('password');
+      const btn = document.getElementById('btn-submit');
+      const errBox = document.getElementById('login-error');
+      const password = pwdInput.value;
+
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+      errBox.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const json = await res.json();
+        if (res.ok && json.success && json.data && json.data.token) {
+          localStorage.setItem('docklite_token', json.data.token);
+          window.location.replace('/');
+        } else {
+          errBox.textContent = json.error || 'Invalid password';
+          errBox.classList.remove('hidden');
+          pwdInput.select();
+        }
+      } catch (err) {
+        errBox.textContent = 'Connection error: ' + err.message;
+        errBox.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Unlock Dashboard';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', checkAuthAndRedirect);
+  </script>
+</body>
+</html>

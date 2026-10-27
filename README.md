@@ -44,7 +44,7 @@ docker run -d \
   --restart unless-stopped \
   -p 3000:3000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  docklite:latest
+  kyrozyn/docklite:latest
 
 ```
 With Password

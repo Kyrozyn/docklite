@@ -49,6 +49,26 @@ pub fn extract_bearer_token(headers: &axum::http::HeaderMap) -> Option<String> {
         })
 }
 
+pub fn extract_token(headers: &axum::http::HeaderMap) -> Option<String> {
+    if let Some(token) = extract_bearer_token(headers) {
+        if !token.is_empty() {
+            return Some(token);
+        }
+    }
+    if let Some(cookie_hdr) = headers.get(header::COOKIE).and_then(|c| c.to_str().ok()) {
+        for cookie in cookie_hdr.split(';') {
+            let cookie = cookie.trim();
+            if let Some(val) = cookie.strip_prefix("docklite_token=") {
+                let token = val.trim();
+                if !token.is_empty() {
+                    return Some(token.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 pub async fn auth_status(
     State(auth): State<Arc<AuthManager>>,
     headers: axum::http::HeaderMap,
@@ -57,7 +77,7 @@ pub async fn auth_status(
     let mut authenticated = !auth_required;
 
     if auth_required
-        && let Some(token) = extract_bearer_token(&headers)
+        && let Some(token) = extract_token(&headers)
         && auth.validate_token(&token).await
     {
         authenticated = true;
@@ -72,27 +92,39 @@ pub async fn auth_status(
 pub async fn auth_login(
     State(auth): State<Arc<AuthManager>>,
     Json(payload): Json<LoginRequest>,
-) -> impl IntoResponse {
+) -> Response {
     match auth.login(&payload.password).await {
-        Some(token) => (
-            StatusCode::OK,
-            Json(ApiResponse::ok(LoginResponse { token })),
-        ),
+        Some(token) => {
+            let cookie = format!("docklite_token={}; Path=/; SameSite=Lax; HttpOnly", token);
+            (
+                StatusCode::OK,
+                [(header::SET_COOKIE, cookie)],
+                Json(ApiResponse::ok(LoginResponse { token })),
+            )
+                .into_response()
+        }
         None => (
             StatusCode::UNAUTHORIZED,
-            Json(ApiResponse::err("Invalid password")),
-        ),
+            Json(ApiResponse::<()>::err("Invalid password")),
+        )
+            .into_response(),
     }
 }
 
 pub async fn auth_logout(
     State(auth): State<Arc<AuthManager>>,
     headers: axum::http::HeaderMap,
-) -> impl IntoResponse {
-    if let Some(token) = extract_bearer_token(&headers) {
+) -> Response {
+    if let Some(token) = extract_token(&headers) {
         auth.logout(&token).await;
     }
-    Json(ApiResponse::ok("Logged out successfully"))
+    let cookie = "docklite_token=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly";
+    (
+        StatusCode::OK,
+        [(header::SET_COOKIE, cookie)],
+        Json(ApiResponse::ok("Logged out successfully")),
+    )
+        .into_response()
 }
 
 pub async fn auth_middleware(
@@ -104,7 +136,7 @@ pub async fn auth_middleware(
         return next.run(req).await;
     }
 
-    if let Some(token) = extract_bearer_token(req.headers())
+    if let Some(token) = extract_token(req.headers())
         && auth.validate_token(&token).await
     {
         return next.run(req).await;
@@ -339,5 +371,30 @@ pub async fn system_prune(State(docker): State<SharedState>) -> impl IntoRespons
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::err(e)),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderMap;
+
+    #[test]
+    fn test_extract_token() {
+        let mut headers = HeaderMap::new();
+        assert_eq!(extract_token(&headers), None);
+
+        // Bearer uppercase
+        headers.insert(header::AUTHORIZATION, "Bearer my-secret-token".parse().unwrap());
+        assert_eq!(extract_token(&headers), Some("my-secret-token".to_string()));
+
+        // Bearer lowercase
+        headers.insert(header::AUTHORIZATION, "bearer lower-token".parse().unwrap());
+        assert_eq!(extract_token(&headers), Some("lower-token".to_string()));
+
+        // From Cookie
+        headers.remove(header::AUTHORIZATION);
+        headers.insert(header::COOKIE, "other=val; docklite_token=cookie-secret; foo=bar".parse().unwrap());
+        assert_eq!(extract_token(&headers), Some("cookie-secret".to_string()));
     }
 }
