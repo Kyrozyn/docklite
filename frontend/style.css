@@ -848,3 +848,78 @@ body {
 .toast.toast-success { border-left: 4px solid #3fb950; }
 .toast.toast-error { border-left: 4px solid #f85149; }
 .toast.toast-info { border-left: 4px solid var(--primary); }
+
+/* Utilities & Authentication */
+.hidden {
+  display: none !important;
+}
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(13, 17, 23, 0.94);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 16px;
+}
+
+.login-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  animation: toastIn 0.25s ease-out;
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.login-brand .brand-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--primary);
+}
+
+.login-brand h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5px;
+}
+
+.login-subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.login-error {
+  background: rgba(218, 54, 51, 0.15);
+  border: 1px solid var(--danger);
+  color: #f85149;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+
+.btn-block {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+  font-size: 14px;
+  margin-top: 8px;
+}

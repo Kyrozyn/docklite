@@ -15,10 +15,13 @@ let cachedSystem = null;
 let containerFilter = 'all';
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   setupNavigation();
   setupEventListeners();
-  loadAllData();
+  const allowed = await checkAuth();
+  if (allowed) {
+    loadAllData();
+  }
   setupAutoRefresh();
 });
 
@@ -88,16 +91,146 @@ function setupAutoRefresh() {
   }
 }
 
+// Authentication State & Handlers
+let authRequired = false;
+
+async function checkAuth() {
+  const token = localStorage.getItem('docklite_token') || '';
+  try {
+    const res = await fetch('/api/auth/status', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const json = await res.json();
+    if (json.success && json.data) {
+      authRequired = json.data.auth_required;
+      const authenticated = json.data.authenticated;
+      const logoutBtn = document.getElementById('btn-logout');
+
+      if (authRequired) {
+        if (!authenticated) {
+          showLoginOverlay(false);
+          return false;
+        } else if (logoutBtn) {
+          logoutBtn.classList.remove('hidden');
+        }
+      } else if (logoutBtn) {
+        logoutBtn.classList.add('hidden');
+      }
+    }
+    hideLoginOverlay();
+    return true;
+  } catch (err) {
+    console.error('Failed to verify auth status:', err);
+    return true;
+  }
+}
+
+function showLoginOverlay(showError = false) {
+  const overlay = document.getElementById('login-overlay');
+  const errDiv = document.getElementById('login-error');
+  if (!overlay) return;
+  if (showError) {
+    errDiv.textContent = 'Session expired or password required.';
+    errDiv.classList.remove('hidden');
+  } else {
+    errDiv.classList.add('hidden');
+  }
+  overlay.classList.remove('hidden');
+  const pwdInput = document.getElementById('login-password');
+  if (pwdInput) {
+    pwdInput.value = '';
+    pwdInput.focus();
+  }
+}
+
+function hideLoginOverlay() {
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+async function handleLoginSubmit(event) {
+  event.preventDefault();
+  const passwordInput = document.getElementById('login-password');
+  const btn = document.getElementById('btn-login-submit');
+  const errDiv = document.getElementById('login-error');
+  const password = passwordInput.value;
+
+  btn.disabled = true;
+  btn.textContent = 'Verifying...';
+  errDiv.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const json = await res.json();
+    if (json.success && json.data && json.data.token) {
+      localStorage.setItem('docklite_token', json.data.token);
+      hideLoginOverlay();
+      const logoutBtn = document.getElementById('btn-logout');
+      if (logoutBtn) logoutBtn.classList.remove('hidden');
+      showToast('Unlocked successfully', 'success');
+      loadAllData();
+    } else {
+      errDiv.textContent = json.error || 'Invalid password';
+      errDiv.classList.remove('hidden');
+      passwordInput.select();
+    }
+  } catch (err) {
+    errDiv.textContent = 'Connection error: ' + err.message;
+    errDiv.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Unlock Dashboard';
+  }
+}
+
+async function handleLogout() {
+  const token = localStorage.getItem('docklite_token') || '';
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+  } catch (e) {
+    console.warn(e);
+  }
+  localStorage.removeItem('docklite_token');
+  const logoutBtn = document.getElementById('btn-logout');
+  if (logoutBtn) logoutBtn.classList.add('hidden');
+  showLoginOverlay(false);
+  showToast('Logged out', 'info');
+}
+
 // API Helpers
 async function apiCall(endpoint, options = {}) {
+  const token = localStorage.getItem('docklite_token');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {})
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   try {
     const res = await fetch(endpoint, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options.headers || {})
-      },
-      ...options
+      ...options,
+      headers
     });
+
+    if (res.status === 401 && endpoint !== '/api/auth/login' && endpoint !== '/api/auth/status') {
+      localStorage.removeItem('docklite_token');
+      showLoginOverlay(true);
+      throw new Error('Authentication required');
+    }
+
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(data.error || `HTTP ${res.status}`);

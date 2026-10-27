@@ -1,3 +1,4 @@
+mod auth;
 mod docker_ops;
 mod models;
 mod routes;
@@ -79,9 +80,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Build API routes
-    let api_routes = Router::new()
-        .route("/health", get(routes::health))
+    // Initialize Auth Manager (checks DOCKLITE_PASSWORD / AUTH_PASSWORD in env)
+    let auth_mgr = Arc::new(auth::AuthManager::new());
+
+    // Public API routes
+    let public_api = Router::new()
+        .route("/health", get(routes::health));
+
+    // Authentication endpoints
+    let auth_api = Router::new()
+        .route("/auth/status", get(routes::auth_status))
+        .route("/auth/login", post(routes::auth_login))
+        .route("/auth/logout", post(routes::auth_logout))
+        .with_state(auth_mgr.clone());
+
+    // Protected Docker Management routes
+    let protected_docker_api = Router::new()
         .route("/system/info", get(routes::system_info))
         .route("/system/prune", post(routes::system_prune))
         .route("/containers", get(routes::list_containers))
@@ -99,7 +113,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/networks", get(routes::list_networks))
         .route("/networks/create", post(routes::create_network))
         .route("/networks/{id}", delete(routes::remove_network))
-        .with_state(docker_mgr);
+        .with_state(docker_mgr)
+        .layer(axum::middleware::from_fn_with_state(
+            auth_mgr.clone(),
+            routes::auth_middleware,
+        ));
+
+    // Build unified API routes
+    let api_routes = Router::new()
+        .merge(public_api)
+        .merge(auth_api)
+        .merge(protected_docker_api);
 
     // Main App router
     let app = Router::new()

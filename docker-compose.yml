@@ -15,6 +15,8 @@ services:
       - PORT=3000
       - HOST=0.0.0.0
       - RUST_LOG=docklite=info
+      # Optional password protection. If left blank or unset, no login is required (default).
+      - DOCKLITE_PASSWORD=${DOCKLITE_PASSWORD:-}
     # Demonstrates DockLite's minimal footprint (< 15MB RAM)
     deploy:
       resources:

@@ -1,9 +1,11 @@
+use crate::auth::AuthManager;
 use crate::docker_ops::DockerManager;
 use crate::models::*;
 use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
+    extract::{Path, Query, Request, State},
+    http::{header, StatusCode},
+    middleware::Next,
+    response::{IntoResponse, Response},
     Json,
 };
 use serde::Deserialize;
@@ -28,6 +30,91 @@ pub struct RemoveImageQuery {
 
 pub async fn health() -> impl IntoResponse {
     Json(ApiResponse::ok("DockLite is running healthy"))
+}
+
+// Authentication
+pub fn extract_bearer_token(headers: &axum::http::HeaderMap) -> Option<String> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .map(|h| {
+            let h = h.trim();
+            if let Some(token) = h.strip_prefix("Bearer ") {
+                token.trim().to_string()
+            } else if let Some(token) = h.strip_prefix("bearer ") {
+                token.trim().to_string()
+            } else {
+                h.to_string()
+            }
+        })
+}
+
+pub async fn auth_status(
+    State(auth): State<Arc<AuthManager>>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    let auth_required = auth.is_required();
+    let mut authenticated = !auth_required;
+
+    if auth_required
+        && let Some(token) = extract_bearer_token(&headers)
+        && auth.validate_token(&token).await
+    {
+        authenticated = true;
+    }
+
+    Json(ApiResponse::ok(AuthStatusView {
+        auth_required,
+        authenticated,
+    }))
+}
+
+pub async fn auth_login(
+    State(auth): State<Arc<AuthManager>>,
+    Json(payload): Json<LoginRequest>,
+) -> impl IntoResponse {
+    match auth.login(&payload.password).await {
+        Some(token) => (
+            StatusCode::OK,
+            Json(ApiResponse::ok(LoginResponse { token })),
+        ),
+        None => (
+            StatusCode::UNAUTHORIZED,
+            Json(ApiResponse::err("Invalid password")),
+        ),
+    }
+}
+
+pub async fn auth_logout(
+    State(auth): State<Arc<AuthManager>>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    if let Some(token) = extract_bearer_token(&headers) {
+        auth.logout(&token).await;
+    }
+    Json(ApiResponse::ok("Logged out successfully"))
+}
+
+pub async fn auth_middleware(
+    State(auth): State<Arc<AuthManager>>,
+    req: Request,
+    next: Next,
+) -> Response {
+    if !auth.is_required() {
+        return next.run(req).await;
+    }
+
+    if let Some(token) = extract_bearer_token(req.headers())
+        && auth.validate_token(&token).await
+    {
+        return next.run(req).await;
+    }
+
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(ApiResponse::<()>::err("Unauthorized: authentication required")),
+    )
+        .into_response()
 }
 
 // Containers

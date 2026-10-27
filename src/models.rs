@@ -39,6 +39,22 @@ pub struct ContainerSummaryView {
     pub ports: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AuthStatusView {
+    pub auth_required: bool,
+    pub authenticated: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LoginRequest {
+    pub password: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LoginResponse {
+    pub token: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateContainerRequest {
     pub image: String,
@@ -127,6 +143,26 @@ pub struct NetworkSummaryView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_auth_models() {
+        let status = AuthStatusView {
+            auth_required: true,
+            authenticated: false,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"auth_required\":true"));
+        assert!(json.contains("\"authenticated\":false"));
+
+        let login_req: LoginRequest = serde_json::from_str(r#"{"password":"secret"}"#).unwrap();
+        assert_eq!(login_req.password, "secret");
+
+        let login_res = LoginResponse {
+            token: "tok123".to_string(),
+        };
+        let res_json = serde_json::to_string(&login_res).unwrap();
+        assert!(res_json.contains("\"token\":\"tok123\""));
+    }
 
     #[test]
     fn test_api_response_ok() {

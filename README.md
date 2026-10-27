@@ -10,6 +10,9 @@
   - Binary size: ~12 MB (stripped with LTO).
   - Runtime memory footprint: **< 15 MB RAM** (vs Portainer's 40–80 MB).
   - Single binary with all frontend HTML/CSS/JS embedded via `rust-embed` (no external static server or CDN needed).
+- **🔒 Optional Password Protection**:
+  - Zero-config by default: open access without login.
+  - Set `DOCKLITE_PASSWORD` in your `.env` or Docker environment to instantly protect the web UI and REST API.
 - **📦 Container Management**:
   - View all containers with live state indicators (running, stopped, paused).
   - One-click actions: **Start**, **Stop**, **Restart**, **Pause**, **Unpause**, and **Remove**.
@@ -35,10 +38,20 @@
 Run DockLite directly by mounting the Docker socket:
 
 ```bash
+# Run without password (default)
 docker run -d \
   --name docklite \
   --restart unless-stopped \
   -p 3000:3000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  docklite:latest
+
+# Or run with password protection
+docker run -d \
+  --name docklite \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -e DOCKLITE_PASSWORD="your-strong-password" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   docklite:latest
 ```
