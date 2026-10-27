@@ -58,6 +58,10 @@
             <div class="host-sub" id="docker-version-str">v--</div>
           </div>
         </div>
+        <button class="sidebar-logout-btn btn-logout-action hidden" id="btn-logout-sidebar" onclick="handleLogout()" title="Log out">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          Logout
+        </button>
       </div>
     </aside>
 
@@ -81,7 +85,7 @@
           <button class="btn btn-secondary btn-icon" id="btn-manual-refresh" title="Refresh Now">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
           </button>
-          <button class="btn btn-secondary btn-sm hidden" id="btn-logout" onclick="handleLogout()" title="Log out">
+          <button class="btn btn-outline-danger btn-sm btn-logout-action hidden" id="btn-logout" onclick="handleLogout()" title="Log out">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
             Logout
           </button>

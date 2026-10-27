@@ -78,6 +78,11 @@ function setupEventListeners() {
   document.getElementById('images-search').addEventListener('input', renderImagesTable);
   document.getElementById('volumes-search').addEventListener('input', renderVolumesTable);
   document.getElementById('networks-search').addEventListener('input', renderNetworksTable);
+
+  // Logout buttons
+  document.querySelectorAll('.btn-logout-action').forEach(btn => {
+    btn.addEventListener('click', handleLogout);
+  });
 }
 
 function setupAutoRefresh() {
@@ -96,8 +101,17 @@ function setupAutoRefresh() {
 // Authentication State & Handlers
 let authRequired = false;
 
+function updateLogoutButtons(show) {
+  document.querySelectorAll('.btn-logout-action').forEach(btn => {
+    btn.classList.toggle('hidden', !show);
+  });
+}
+
 async function checkAuth() {
   const token = localStorage.getItem('docklite_token') || '';
+  if (token) {
+    updateLogoutButtons(true);
+  }
   try {
     const res = await fetch('/api/auth/status', {
       headers: token ? {
@@ -108,21 +122,26 @@ async function checkAuth() {
     if (json.success && json.data) {
       authRequired = json.data.auth_required;
       const authenticated = json.data.authenticated;
-      const logoutBtn = document.getElementById('btn-logout');
 
       if (authRequired) {
         if (!authenticated) {
+          localStorage.removeItem('docklite_token');
+          updateLogoutButtons(false);
           return false;
-        } else if (logoutBtn) {
-          logoutBtn.classList.remove('hidden');
+        } else {
+          updateLogoutButtons(true);
         }
-      } else if (logoutBtn) {
-        logoutBtn.classList.add('hidden');
+      } else if (token) {
+        updateLogoutButtons(true);
+      } else {
+        updateLogoutButtons(false);
       }
     }
     return true;
   } catch (err) {
     console.error('Failed to verify auth status:', err);
+    localStorage.removeItem('docklite_token');
+    updateLogoutButtons(false);
     return false;
   }
 }

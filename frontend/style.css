@@ -142,6 +142,32 @@ body {
   padding: 16px;
   border-top: 1px solid var(--border-color);
   background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sidebar-logout-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--danger-hover);
+  border: 1px solid rgba(248, 81, 73, 0.35);
+  border-radius: var(--radius-md);
+  background: rgba(248, 81, 73, 0.08);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-logout-btn:hover {
+  background: rgba(248, 81, 73, 0.18);
+  border-color: var(--danger-hover);
+  color: #ff7b72;
 }
 
 .host-status {

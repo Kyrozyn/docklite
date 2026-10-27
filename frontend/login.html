@@ -371,7 +371,11 @@
         if (json.success && json.data) {
           if (!json.data.auth_required || json.data.authenticated) {
             window.location.replace('/');
+          } else {
+            localStorage.removeItem('docklite_token');
           }
+        } else {
+          localStorage.removeItem('docklite_token');
         }
       } catch (err) {
         console.warn('Auth status check error:', err);

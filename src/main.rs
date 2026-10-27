@@ -39,7 +39,12 @@ async fn static_handler(
                 None => false,
             };
             if !is_authed {
-                return axum::response::Redirect::to("/login").into_response();
+                let clear_cookie = "docklite_token=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly";
+                return (
+                    [(header::SET_COOKIE, clear_cookie)],
+                    axum::response::Redirect::to("/login"),
+                )
+                    .into_response();
             }
         }
     } else if path == "login" || path == "login.html" {
@@ -69,7 +74,12 @@ async fn static_handler(
                     None => false,
                 };
                 if !is_authed {
-                    return axum::response::Redirect::to("/login").into_response();
+                    let clear_cookie = "docklite_token=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly";
+                    return (
+                        [(header::SET_COOKIE, clear_cookie)],
+                        axum::response::Redirect::to("/login"),
+                    )
+                        .into_response();
                 }
             }
 

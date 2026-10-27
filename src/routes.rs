@@ -72,21 +72,54 @@ pub fn extract_token(headers: &axum::http::HeaderMap) -> Option<String> {
 pub async fn auth_status(
     State(auth): State<Arc<AuthManager>>,
     headers: axum::http::HeaderMap,
-) -> impl IntoResponse {
+) -> Response {
     let auth_required = auth.is_required();
     let mut authenticated = !auth_required;
+    let mut valid_token: Option<String> = None;
 
-    if auth_required
-        && let Some(token) = extract_token(&headers)
-        && auth.validate_token(&token).await
-    {
-        authenticated = true;
+    if auth_required {
+        if let Some(token) = extract_token(&headers) {
+            if auth.validate_token(&token).await {
+                authenticated = true;
+                valid_token = Some(token);
+            }
+        }
     }
 
-    Json(ApiResponse::ok(AuthStatusView {
-        auth_required,
-        authenticated,
-    }))
+    if authenticated {
+        if let Some(token) = valid_token {
+            let cookie = format!("docklite_token={}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly", token);
+            (
+                StatusCode::OK,
+                [(header::SET_COOKIE, cookie)],
+                Json(ApiResponse::ok(AuthStatusView {
+                    auth_required,
+                    authenticated,
+                })),
+            )
+                .into_response()
+        } else {
+            (
+                StatusCode::OK,
+                Json(ApiResponse::ok(AuthStatusView {
+                    auth_required,
+                    authenticated,
+                })),
+            )
+                .into_response()
+        }
+    } else {
+        let clear_cookie = "docklite_token=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly";
+        (
+            StatusCode::OK,
+            [(header::SET_COOKIE, clear_cookie)],
+            Json(ApiResponse::ok(AuthStatusView {
+                auth_required,
+                authenticated,
+            })),
+        )
+            .into_response()
+    }
 }
 
 pub async fn auth_login(
@@ -95,7 +128,7 @@ pub async fn auth_login(
 ) -> Response {
     match auth.login(&payload.password).await {
         Some(token) => {
-            let cookie = format!("docklite_token={}; Path=/; SameSite=Lax; HttpOnly", token);
+            let cookie = format!("docklite_token={}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly", token);
             (
                 StatusCode::OK,
                 [(header::SET_COOKIE, cookie)],
@@ -142,8 +175,10 @@ pub async fn auth_middleware(
         return next.run(req).await;
     }
 
+    let clear_cookie = "docklite_token=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly";
     (
         StatusCode::UNAUTHORIZED,
+        [(header::SET_COOKIE, clear_cookie)],
         Json(ApiResponse::<()>::err("Unauthorized: authentication required")),
     )
         .into_response()
