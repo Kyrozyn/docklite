@@ -46,21 +46,6 @@ docker run -d \
   -v /var/run/docker.sock:/var/run/docker.sock \
   docklite:latest
 
-# Or run with password protection
-docker run -d \
-  --name docklite \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  -e DOCKLITE_PASSWORD="your-strong-password" \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  docklite:latest
-      --name docklite \
-      --restart unless-stopped \
-      -p 3000:3000 \
-      -v /var/run/docker.sock:/var/run/docker.sock \
-      -e DOCKLITE_PASSWORD="rahasia123" \
-      kyrozyn/docklite:latest
-
 ```
 With Password
 
