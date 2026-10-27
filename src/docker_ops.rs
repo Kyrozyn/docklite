@@ -200,6 +200,69 @@ impl DockerManager {
         Ok(logs)
     }
 
+    pub async fn exec_container(
+        &self,
+        id: &str,
+        shell: Option<&str>,
+        command: &str,
+    ) -> Result<(String, Option<i64>), String> {
+        use bollard::exec::{CreateExecOptions, StartExecResults};
+
+        let cmd: Vec<&str> = if let Some(sh) = shell {
+            let sh_clean = sh.trim();
+            if sh_clean.is_empty() {
+                vec!["/bin/sh", "-c", command]
+            } else {
+                vec![sh_clean, "-c", command]
+            }
+        } else {
+            vec!["/bin/sh", "-c", command]
+        };
+
+        let exec_options = CreateExecOptions {
+            cmd: Some(cmd),
+            attach_stdout: Some(true),
+            attach_stderr: Some(true),
+            ..Default::default()
+        };
+
+        let exec = self
+            .docker
+            .create_exec(id, exec_options)
+            .await
+            .map_err(|e| format!("Failed to create exec: {}", e))?;
+
+        let output_results = self
+            .docker
+            .start_exec(&exec.id, None)
+            .await
+            .map_err(|e| format!("Failed to start exec: {}", e))?;
+
+        let mut output_str = String::new();
+
+        if let StartExecResults::Attached { mut output, .. } = output_results {
+            while let Some(msg_res) = output.next().await {
+                match msg_res {
+                    Ok(log) => {
+                        output_str.push_str(&log.to_string());
+                    }
+                    Err(e) => {
+                        output_str.push_str(&format!("\n[Error reading stream: {}]", e));
+                        break;
+                    }
+                }
+            }
+        }
+
+        let inspect = self
+            .docker
+            .inspect_exec(&exec.id)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        Ok((output_str, inspect.exit_code))
+    }
+
     pub async fn get_container_stats(&self, id: &str) -> Result<ContainerStatsView, String> {
         let options = Some(StatsOptions {
             stream: false,

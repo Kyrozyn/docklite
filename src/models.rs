@@ -67,6 +67,18 @@ pub struct CreateContainerRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ContainerExecRequest {
+    pub shell: Option<String>,
+    pub command: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ContainerExecResponse {
+    pub output: String,
+    pub exit_code: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct PullImageRequest {
     pub image: String,
 }

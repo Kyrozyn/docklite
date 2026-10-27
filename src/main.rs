@@ -153,6 +153,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/containers/{id}/action/{action}", post(routes::container_action))
         .route("/containers/{id}/logs", get(routes::container_logs))
         .route("/containers/{id}/stats", get(routes::container_stats))
+        .route("/containers/{id}/exec", post(routes::container_exec))
         .route("/images", get(routes::list_images))
         .route("/images/pull", post(routes::pull_image))
         .route("/images/{id}", delete(routes::remove_image))

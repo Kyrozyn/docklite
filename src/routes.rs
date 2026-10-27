@@ -253,6 +253,26 @@ pub async fn container_stats(
     }
 }
 
+pub async fn container_exec(
+    State(docker): State<SharedState>,
+    Path(id): Path<String>,
+    Json(payload): Json<ContainerExecRequest>,
+) -> impl IntoResponse {
+    match docker
+        .exec_container(&id, payload.shell.as_deref(), &payload.command)
+        .await
+    {
+        Ok((output, exit_code)) => (
+            StatusCode::OK,
+            Json(ApiResponse::ok(ContainerExecResponse { output, exit_code })),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()>::err(e)),
+        ),
+    }
+}
+
 pub async fn create_container(
     State(docker): State<SharedState>,
     Json(payload): Json<CreateContainerRequest>,
