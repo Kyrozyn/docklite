@@ -268,7 +268,7 @@ pub async fn container_exec(
         ),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()>::err(e)),
+            Json(ApiResponse::err(e)),
         ),
     }
 }
