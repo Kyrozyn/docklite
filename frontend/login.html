@@ -6,60 +6,361 @@
   <title>DockLite - Login</title>
   <link rel="stylesheet" href="/style.css">
   <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(1000px 500px at 50% -50px, rgba(56, 139, 253, 0.16), transparent 80%), #0a0d14;
+      color: #f0f6fc;
+      padding: 20px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 410px;
+    }
+
+    .login-card {
+      background: rgba(22, 27, 34, 0.94);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(240, 246, 252, 0.12);
+      border-radius: 18px;
+      padding: 40px 34px 34px;
+      box-shadow:
+        0 24px 60px -15px rgba(0, 0, 0, 0.75),
+        0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 0 35px -8px rgba(56, 139, 253, 0.15);
+      animation: cardIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes cardIn {
+      from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .brand-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .icon-box {
+      width: 58px;
+      height: 58px;
+      background: linear-gradient(135deg, rgba(56, 139, 253, 0.22), rgba(56, 139, 253, 0.06));
+      border: 1px solid rgba(56, 139, 253, 0.35);
+      border-radius: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
-      background-color: var(--bg-body);
-      margin: 0;
-      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 0 24px rgba(56, 139, 253, 0.25);
     }
-    .login-wrapper {
+
+    .icon-box svg {
+      width: 32px;
+      height: 32px;
+      color: #58a6ff;
+    }
+
+    .brand-header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    .badge-lock {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(56, 139, 253, 0.15);
+      border: 1px solid rgba(56, 139, 253, 0.35);
+      color: #79c0ff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .badge-lock svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .brand-header p {
+      color: #c9d1d9;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 320px;
+    }
+
+    .login-error {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(248, 81, 73, 0.15);
+      border: 1px solid #f85149;
+      color: #ff7b72;
+      padding: 11px 14px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      font-weight: 500;
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+
+    .login-error svg {
+      flex-shrink: 0;
+      width: 16px;
+      height: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      color: #f0f6fc;
+      font-size: 13.5px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-icon-left {
+      position: absolute;
+      left: 14px;
+      width: 18px;
+      height: 18px;
+      color: #8b949e;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .password-input {
       width: 100%;
-      max-width: 400px;
+      height: 46px;
+      background: #0d1117;
+      border: 1.5px solid #30363d;
+      border-radius: 10px;
+      padding: 0 42px 0 42px;
+      color: #ffffff;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .password-input::placeholder {
+      color: #6e7681;
+      font-size: 14px;
+    }
+
+    .password-input:focus {
+      border-color: #58a6ff;
+      background: #111620;
+      box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.25);
+    }
+
+    .btn-toggle-eye {
+      position: absolute;
+      right: 12px;
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+
+    .btn-toggle-eye:hover {
+      color: #f0f6fc;
+    }
+
+    .btn-submit {
+      width: 100%;
+      height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: linear-gradient(180deg, #2f81f7 0%, #1f6feb 100%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(31, 111, 235, 0.35);
+      transition: all 0.15s ease;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(31, 111, 235, 0.45);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .footer-text {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 12.5px;
+      color: #8b949e;
+    }
+
+    .footer-text span {
+      color: #58a6ff;
+      font-weight: 600;
+    }
+
+    .hidden {
+      display: none !important;
     }
   </style>
 </head>
 <body>
-  <div class="login-wrapper">
+  <div class="login-container">
     <div class="login-card">
-      <div class="login-brand">
-        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 12.5V17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-4.5c0-.8.7-1.5 1.5-1.5h1.2c.4 0 .8-.2 1-.5l.8-1.5c.3-.5.8-.8 1.4-.8h4.2c.6 0 1.1.3 1.4.8l.8 1.5c.2.3.6.5 1 .5h4.2c.8 0 1.5.7 1.5 1.5z"></path>
-          <rect x="5" y="4" width="3" height="3" rx="0.5"></rect>
-          <rect x="9" y="4" width="3" height="3" rx="0.5"></rect>
-          <rect x="13" y="4" width="3" height="3" rx="0.5"></rect>
-          <rect x="7" y="7.5" width="3" height="3" rx="0.5"></rect>
-          <rect x="11" y="7.5" width="3" height="3" rx="0.5"></rect>
-        </svg>
-        <h2>DockLite</h2>
-        <span class="brand-badge">Password Protected</span>
+      <div class="brand-header">
+        <div class="icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12.5V17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-4.5c0-.8.7-1.5 1.5-1.5h1.2c.4 0 .8-.2 1-.5l.8-1.5c.3-.5.8-.8 1.4-.8h4.2c.6 0 1.1.3 1.4.8l.8 1.5c.2.3.6.5 1 .5h4.2c.8 0 1.5.7 1.5 1.5z"></path>
+            <rect x="5" y="4" width="3" height="3" rx="0.5"></rect>
+            <rect x="9" y="4" width="3" height="3" rx="0.5"></rect>
+            <rect x="13" y="4" width="3" height="3" rx="0.5"></rect>
+            <rect x="7" y="7.5" width="3" height="3" rx="0.5"></rect>
+            <rect x="11" y="7.5" width="3" height="3" rx="0.5"></rect>
+          </svg>
+        </div>
+        <h1>DockLite</h1>
+        <div class="badge-lock">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          Password Protected
+        </div>
+        <p>Enter your master password to unlock the Docker dashboard.</p>
       </div>
-      <p class="login-subtitle">Please enter the password to access your Docker environment.</p>
 
-      <div id="login-error" class="login-error hidden"></div>
+      <div id="login-error" class="login-error hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span id="login-error-text">Invalid password</span>
+      </div>
 
       <form id="login-form" onsubmit="handleLogin(event)">
-        <div class="form-group" style="text-align: left;">
-          <label for="password">Password</label>
-          <input
-            type="password"
-            id="password"
-            placeholder="Enter password..."
-            autocomplete="current-password"
-            required
-            autofocus
-          >
+        <div class="form-group">
+          <label class="form-label" for="password">Master Password</label>
+          <div class="input-wrapper">
+            <div class="input-icon-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <input
+              type="password"
+              id="password"
+              class="password-input"
+              placeholder="Enter master password..."
+              autocomplete="current-password"
+              required
+              autofocus
+            >
+            <button type="button" class="btn-toggle-eye" id="btn-toggle-eye" onclick="togglePasswordVisibility()" title="Show/Hide Password">
+              <svg id="eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
         </div>
-        <button type="submit" id="btn-submit" class="btn btn-primary btn-block">
-          Unlock Dashboard
+
+        <button type="submit" id="btn-submit" class="btn-submit">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+          <span id="btn-text">Unlock Dashboard</span>
         </button>
       </form>
+    </div>
+
+    <div class="footer-text">
+      DockLite <span>Rust Core</span> &bull; Lightweight Docker Manager
     </div>
   </div>
 
   <script>
+    function togglePasswordVisibility() {
+      const input = document.getElementById('password');
+      const eyeIcon = document.getElementById('eye-icon');
+      if (input.type === 'password') {
+        input.type = 'text';
+        eyeIcon.innerHTML = `
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+        `;
+      } else {
+        input.type = 'password';
+        eyeIcon.innerHTML = `
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        `;
+      }
+    }
+
     async function checkAuthAndRedirect() {
       const token = localStorage.getItem('docklite_token') || '';
       try {
@@ -81,11 +382,13 @@
       e.preventDefault();
       const pwdInput = document.getElementById('password');
       const btn = document.getElementById('btn-submit');
+      const btnText = document.getElementById('btn-text');
       const errBox = document.getElementById('login-error');
+      const errText = document.getElementById('login-error-text');
       const password = pwdInput.value;
 
       btn.disabled = true;
-      btn.textContent = 'Verifying...';
+      btnText.textContent = 'Verifying...';
       errBox.classList.add('hidden');
 
       try {
@@ -99,16 +402,16 @@
           localStorage.setItem('docklite_token', json.data.token);
           window.location.replace('/');
         } else {
-          errBox.textContent = json.error || 'Invalid password';
+          errText.textContent = json.error || 'Invalid password';
           errBox.classList.remove('hidden');
           pwdInput.select();
         }
       } catch (err) {
-        errBox.textContent = 'Connection error: ' + err.message;
+        errText.textContent = 'Connection error: ' + err.message;
         errBox.classList.remove('hidden');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Unlock Dashboard';
+        btnText.textContent = 'Unlock Dashboard';
       }
     }
 
