@@ -72,6 +72,11 @@ pub struct ContainerExecRequest {
     pub command: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ContainerTerminalQuery {
+    pub shell: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ContainerExecResponse {
     pub output: String,

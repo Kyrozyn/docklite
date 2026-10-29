@@ -263,6 +263,60 @@ impl DockerManager {
         Ok((output_str, inspect.exit_code))
     }
 
+    pub async fn create_exec_interactive(
+        &self,
+        id: &str,
+        cmd: &[&str],
+    ) -> Result<String, String> {
+        use bollard::exec::CreateExecOptions;
+
+        let exec_options = CreateExecOptions {
+            cmd: Some(cmd.to_vec()),
+            attach_stdin: Some(true),
+            attach_stdout: Some(true),
+            attach_stderr: Some(true),
+            tty: Some(true),
+            ..Default::default()
+        };
+
+        let exec = self
+            .docker
+            .create_exec(id, exec_options)
+            .await
+            .map_err(|e| format!("Failed to create exec: {}", e))?;
+
+        Ok(exec.id)
+    }
+
+    pub async fn start_exec_attached(
+        &self,
+        exec_id: &str,
+    ) -> Result<bollard::exec::StartExecResults, String> {
+        self.docker
+            .start_exec(exec_id, None)
+            .await
+            .map_err(|e| format!("Failed to start exec: {}", e))
+    }
+
+    pub async fn resize_exec(
+        &self,
+        exec_id: &str,
+        width: u16,
+        height: u16,
+    ) -> Result<(), String> {
+        use bollard::exec::ResizeExecOptions;
+
+        let options = ResizeExecOptions {
+            width: width as _,
+            height: height as _,
+        };
+
+        self.docker
+            .resize_exec(exec_id, options)
+            .await
+            .map_err(|e| format!("Failed to resize exec: {}", e))
+    }
+
     pub async fn get_container_stats(&self, id: &str) -> Result<ContainerStatsView, String> {
         let options = Some(StatsOptions {
             stream: false,

@@ -2,12 +2,16 @@ use crate::auth::AuthManager;
 use crate::docker_ops::DockerManager;
 use crate::models::*;
 use axum::{
-    extract::{Path, Query, Request, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, Query, Request, State,
+    },
     http::{header, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
 };
+use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -175,6 +179,16 @@ pub async fn auth_middleware(
         return next.run(req).await;
     }
 
+    if let Some(q) = req.uri().query() {
+        for part in q.split('&') {
+            if let Some(tok) = part.strip_prefix("token=")
+                && auth.validate_token(tok).await
+            {
+                return next.run(req).await;
+            }
+        }
+    }
+
     let clear_cookie = "docklite_token=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly";
     (
         StatusCode::UNAUTHORIZED,
@@ -270,6 +284,134 @@ pub async fn container_exec(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResponse::err(e)),
         ),
+    }
+}
+
+pub async fn container_terminal_ws(
+    State(docker): State<SharedState>,
+    Path(id): Path<String>,
+    Query(query): Query<ContainerTerminalQuery>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    let shell = query.shell.unwrap_or_else(|| "/bin/sh".to_string());
+    ws.on_upgrade(move |socket| handle_terminal_socket(docker, id, shell, socket))
+}
+
+async fn handle_terminal_socket(
+    docker: SharedState,
+    container_id: String,
+    shell: String,
+    socket: WebSocket,
+) {
+    let raw_cmd = shell.trim();
+    let cmd_parts: Vec<&str> = if raw_cmd.is_empty() {
+        vec!["/bin/sh"]
+    } else {
+        raw_cmd.split_whitespace().collect()
+    };
+
+    let exec_id = match docker.create_exec_interactive(&container_id, &cmd_parts).await {
+        Ok(id) => id,
+        Err(e) => {
+            let mut s = socket;
+            let err_msg = format!("\r\n\x1b[31m[Gagal membuat sesi exec: {}]\x1b[0m\r\n", e);
+            let _ = s.send(Message::Text(err_msg.into())).await;
+            return;
+        }
+    };
+
+    let start_res = match docker.start_exec_attached(&exec_id).await {
+        Ok(res) => res,
+        Err(e) => {
+            let mut s = socket;
+            let err_msg = format!("\r\n\x1b[31m[Gagal memulai sesi exec: {}]\x1b[0m\r\n", e);
+            let _ = s.send(Message::Text(err_msg.into())).await;
+            return;
+        }
+    };
+
+    if let bollard::exec::StartExecResults::Attached { mut output, mut input } = start_res {
+        let (mut ws_sender, mut ws_receiver) = socket.split();
+        let exec_id_resize = exec_id.clone();
+        let docker_resize = docker.clone();
+
+        let mut send_task = tokio::spawn(async move {
+            while let Some(msg_res) = output.next().await {
+                match msg_res {
+                    Ok(log) => {
+                        let bytes = log.into_bytes();
+                        if ws_sender.send(Message::Binary(bytes)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        let err = format!("\r\n\x1b[31m[Stream error: {}]\x1b[0m\r\n", e);
+                        let _ = ws_sender.send(Message::Text(err.into())).await;
+                        break;
+                    }
+                }
+            }
+        });
+
+        let mut recv_task = tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            while let Some(msg_res) = ws_receiver.next().await {
+                let msg = match msg_res {
+                    Ok(m) => m,
+                    Err(_) => break,
+                };
+
+                match msg {
+                    Message::Text(text) => {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if val.get("type").and_then(|v| v.as_str()) == Some("resize") {
+                                if let (Some(cols), Some(rows)) = (
+                                    val.get("cols").and_then(|v| v.as_u64()),
+                                    val.get("rows").and_then(|v| v.as_u64()),
+                                ) {
+                                    let _ = docker_resize
+                                        .resize_exec(&exec_id_resize, cols as _, rows as _)
+                                        .await;
+                                    continue;
+                                }
+                            } else if val.get("type").and_then(|v| v.as_str()) == Some("input") {
+                                if let Some(data) = val.get("data").and_then(|v| v.as_str()) {
+                                    if input.write_all(data.as_bytes()).await.is_err()
+                                        || input.flush().await.is_err()
+                                    {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
+                        if input.write_all(text.as_bytes()).await.is_err()
+                            || input.flush().await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Message::Binary(bytes) => {
+                        if input.write_all(&bytes).await.is_err()
+                            || input.flush().await.is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Message::Close(_) => break,
+                    _ => {}
+                }
+            }
+        });
+
+        tokio::select! {
+            _ = (&mut send_task) => {
+                recv_task.abort();
+            }
+            _ = (&mut recv_task) => {
+                send_task.abort();
+            }
+        }
     }
 }
 

@@ -23,12 +23,13 @@ const tableStates = {
   networks: { sortKey: '', sortDir: 'asc', page: 1, pageSize: 10 },
 };
 
-// Terminal State
+// Interactive Terminal State
 let activeTerminalContainerId = null;
 let activeTerminalContainerName = '';
-let terminalHistory = [];
-let terminalHistoryIndex = -1;
-let isTerminalRunning = false;
+let activeTerminalShell = '/bin/sh';
+let termInstance = null;
+let fitAddonInstance = null;
+let termWs = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -123,26 +124,18 @@ function setupEventListeners() {
     btn.addEventListener('click', handleLogout);
   });
 
-  // Terminal history navigation
-  const termInput = document.getElementById('terminal-input');
-  if (termInput) {
-    termInput.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (terminalHistory.length > 0 && terminalHistoryIndex > 0) {
-          terminalHistoryIndex--;
-          termInput.value = terminalHistory[terminalHistoryIndex];
-        }
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (terminalHistoryIndex < terminalHistory.length - 1) {
-          terminalHistoryIndex++;
-          termInput.value = terminalHistory[terminalHistoryIndex];
+  // Shell selector custom input sync
+  const customShellInput = document.getElementById('terminal-custom-shell-input');
+  if (customShellInput) {
+    customShellInput.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      document.querySelectorAll('.shell-preset-card').forEach(card => {
+        if (card.getAttribute('data-shell') === val) {
+          card.classList.add('active');
         } else {
-          terminalHistoryIndex = terminalHistory.length;
-          termInput.value = '';
+          card.classList.remove('active');
         }
-      }
+      });
     });
   }
 }
@@ -968,133 +961,255 @@ function copyLogsToClipboard() {
   });
 }
 
-// Terminal / Exec Modal
+// Interactive Terminal (xterm.js + WebSocket)
 function openTerminal(id, name) {
   activeTerminalContainerId = id;
   activeTerminalContainerName = name;
-  document.getElementById('terminal-modal-title').textContent = `Terminal: ${name}`;
   const shortName = name.replace(/^\//, '');
-  document.getElementById('terminal-prompt').textContent = `root@${shortName}:/#`;
-  openModal('modal-terminal');
 
-  const screen = document.getElementById('terminal-screen');
-  screen.innerHTML = `
-    <div class="terminal-line terminal-system">Connected to container ${escapeHtml(name)} (${id.substring(0, 12)})</div>
-    <div class="terminal-line terminal-system">Shell: ${escapeHtml(getSelectedShell())} &bull; Type command or use Quick buttons below.</div>
-  `;
+  const titleEl = document.getElementById('shell-picker-title');
+  if (titleEl) titleEl.textContent = `Pilih Shell: ${shortName}`;
+
+  const cnameEl = document.getElementById('shell-picker-cname');
+  if (cnameEl) cnameEl.textContent = `${shortName} (${id.substring(0, 12)})`;
+
+  // Default to last chosen shell or /bin/sh
+  const defaultShell = activeTerminalShell || '/bin/sh';
+  selectPresetShell(defaultShell);
+
+  openModal('modal-terminal-shell');
   setTimeout(() => {
-    const input = document.getElementById('terminal-input');
-    if (input) input.focus();
+    const input = document.getElementById('terminal-custom-shell-input');
+    if (input) {
+      input.focus();
+      input.select();
+    }
   }, 100);
 }
 
-function handleShellChange() {
-  const select = document.getElementById('terminal-shell-select');
-  const customInput = document.getElementById('terminal-custom-shell');
-  if (select.value === 'custom') {
-    customInput.classList.remove('hidden');
-    customInput.focus();
-  } else {
-    customInput.classList.add('hidden');
-  }
-}
+function selectPresetShell(shell) {
+  const cards = document.querySelectorAll('.shell-preset-card');
+  cards.forEach(card => {
+    if (card.getAttribute('data-shell') === shell) {
+      card.classList.add('active');
+    } else {
+      card.classList.remove('active');
+    }
+  });
 
-function getSelectedShell() {
-  const select = document.getElementById('terminal-shell-select');
-  if (select.value === 'custom') {
-    const customVal = (document.getElementById('terminal-custom-shell').value || '').trim();
-    return customVal || '/bin/sh';
-  }
-  return select.value;
-}
-
-function clearTerminal() {
-  const screen = document.getElementById('terminal-screen');
-  screen.innerHTML = '<div class="terminal-line terminal-system">Terminal cleared.</div>';
-  const input = document.getElementById('terminal-input');
-  if (input) input.focus();
-}
-
-function runQuickCommand(cmd) {
-  const input = document.getElementById('terminal-input');
+  const input = document.getElementById('terminal-custom-shell-input');
   if (input) {
-    input.value = cmd;
-    executeTerminalCommand(cmd);
+    input.value = shell;
   }
 }
 
-function handleTerminalSubmit(e) {
-  e.preventDefault();
-  const input = document.getElementById('terminal-input');
-  const cmd = input.value.trim();
-  if (!cmd) return;
-  executeTerminalCommand(cmd);
+function handleShellSelectSubmit(e) {
+  if (e) e.preventDefault();
+  confirmStartTerminal();
 }
 
-async function executeTerminalCommand(cmd) {
-  if (!activeTerminalContainerId || isTerminalRunning) return;
+function confirmStartTerminal() {
+  const input = document.getElementById('terminal-custom-shell-input');
+  const chosenShell = (input && input.value ? input.value.trim() : '') || '/bin/sh';
+  activeTerminalShell = chosenShell;
 
-  const screen = document.getElementById('terminal-screen');
-  const input = document.getElementById('terminal-input');
-  const btn = document.getElementById('btn-terminal-run');
-  const shell = getSelectedShell();
-  const promptText = document.getElementById('terminal-prompt').textContent;
+  closeModal('modal-terminal-shell');
+  startInteractiveTerminal(activeTerminalContainerId, activeTerminalContainerName, chosenShell);
+}
 
-  // Add to local history
-  terminalHistory.push(cmd);
-  terminalHistoryIndex = terminalHistory.length;
+function startInteractiveTerminal(id, name, shell) {
+  activeTerminalContainerId = id;
+  activeTerminalContainerName = name;
+  activeTerminalShell = shell;
+  const shortName = name.replace(/^\//, '');
 
-  // Render command line
-  const cmdLine = document.createElement('div');
-  cmdLine.className = 'terminal-line terminal-cmd';
-  cmdLine.innerHTML = `<span class="term-prompt">${escapeHtml(promptText)}</span> <span class="term-command">${escapeHtml(cmd)}</span>`;
-  screen.appendChild(cmdLine);
+  const titleEl = document.getElementById('terminal-modal-title');
+  if (titleEl) titleEl.textContent = `Terminal: ${shortName}`;
 
-  input.value = '';
-  input.disabled = true;
-  btn.disabled = true;
-  isTerminalRunning = true;
+  const badgeEl = document.getElementById('terminal-shell-badge');
+  if (badgeEl) badgeEl.textContent = `Shell: ${shell}`;
 
-  const loadingLine = document.createElement('div');
-  loadingLine.className = 'terminal-line terminal-loading';
-  loadingLine.textContent = 'Running command...';
-  screen.appendChild(loadingLine);
-  screen.scrollTop = screen.scrollHeight;
+  setTerminalStatus('connecting', 'Connecting...');
+  openModal('modal-terminal');
 
-  try {
-    const res = await apiCall(`/api/containers/${activeTerminalContainerId}/exec`, {
-      method: 'POST',
-      body: JSON.stringify({
-        shell: shell,
-        command: cmd
-      })
+  // Close existing socket if any
+  closeTerminalSession(false);
+
+  const container = document.getElementById('terminal-xterm-container');
+  if (!container) return;
+
+  if (!termInstance) {
+    if (typeof Terminal === 'undefined') {
+      container.innerHTML = '<div style="color: #ff7b72; padding: 20px;">Error: xterm.js library could not be loaded.</div>';
+      return;
+    }
+
+    termInstance = new Terminal({
+      cursorBlink: true,
+      fontSize: 13,
+      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+      theme: {
+        background: '#0a0d14',
+        foreground: '#e6edf3',
+        cursor: '#58a6ff',
+        cursorAccent: '#0a0d14',
+        selectionBackground: 'rgba(56, 139, 253, 0.4)',
+        black: '#484f58',
+        red: '#ff7b72',
+        green: '#3fb950',
+        yellow: '#d29922',
+        blue: '#58a6ff',
+        magenta: '#bc8cff',
+        cyan: '#39c5cf',
+        white: '#b1bac4',
+        brightBlack: '#6e7681',
+        brightRed: '#ffa198',
+        brightGreen: '#56d364',
+        brightYellow: '#e3b341',
+        brightBlue: '#79c0ff',
+        brightMagenta: '#d2a8ff',
+        brightCyan: '#56d4dd',
+        brightWhite: '#ffffff',
+      },
+      convertEol: true,
+      scrollback: 5000,
     });
 
-    loadingLine.remove();
-
-    const outLine = document.createElement('div');
-    outLine.className = 'terminal-line terminal-output';
-    outLine.textContent = res.output !== undefined && res.output !== '' ? res.output : '(No output)';
-    screen.appendChild(outLine);
-
-    if (res.exit_code !== undefined && res.exit_code !== null && res.exit_code !== 0) {
-      const codeLine = document.createElement('div');
-      codeLine.className = 'terminal-line terminal-error';
-      codeLine.textContent = `[Process exited with code ${res.exit_code}]`;
-      screen.appendChild(codeLine);
+    if (typeof FitAddon !== 'undefined' && FitAddon.FitAddon) {
+      fitAddonInstance = new FitAddon.FitAddon();
+      termInstance.loadAddon(fitAddonInstance);
     }
-  } catch (err) {
-    loadingLine.remove();
-    const errLine = document.createElement('div');
-    errLine.className = 'terminal-line terminal-error';
-    errLine.textContent = `Error: ${err.message}`;
-    screen.appendChild(errLine);
-  } finally {
-    input.disabled = false;
-    btn.disabled = false;
-    isTerminalRunning = false;
-    screen.scrollTop = screen.scrollHeight;
-    input.focus();
+
+    termInstance.open(container);
+
+    termInstance.onData(data => {
+      if (termWs && termWs.readyState === WebSocket.OPEN) {
+        termWs.send(JSON.stringify({ type: 'input', data }));
+      }
+    });
+
+    termInstance.onResize(({ cols, rows }) => {
+      if (termWs && termWs.readyState === WebSocket.OPEN) {
+        termWs.send(JSON.stringify({ type: 'resize', cols, rows }));
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (fitAddonInstance && document.getElementById('modal-terminal').classList.contains('show')) {
+        try { fitAddonInstance.fit(); } catch (_) {}
+      }
+    });
+  } else {
+    termInstance.reset();
+  }
+
+  setTimeout(() => {
+    if (fitAddonInstance) {
+      try { fitAddonInstance.fit(); } catch (_) {}
+    }
+    if (termInstance) termInstance.focus();
+  }, 100);
+
+  // Connect WebSocket
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let token = '';
+  const match = document.cookie.match(/docklite_token=([^;]+)/);
+  if (match) token = match[1];
+
+  const wsUrl = `${protocol}//${window.location.host}/api/containers/${id}/terminal?shell=${encodeURIComponent(shell)}${token ? `&token=${encodeURIComponent(token)}` : ''}`;
+
+  termWs = new WebSocket(wsUrl);
+  termWs.binaryType = 'arraybuffer';
+
+  termWs.onopen = () => {
+    setTerminalStatus('connected', 'Connected');
+    if (fitAddonInstance) {
+      try { fitAddonInstance.fit(); } catch (_) {}
+    }
+    if (termInstance) {
+      termWs.send(JSON.stringify({
+        type: 'resize',
+        cols: termInstance.cols || 80,
+        rows: termInstance.rows || 24
+      }));
+      termInstance.focus();
+    }
+  };
+
+  termWs.onmessage = (event) => {
+    if (typeof event.data === 'string') {
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed.type === 'stdout' || parsed.type === 'output') {
+          termInstance.write(parsed.data);
+          return;
+        }
+      } catch (_) {}
+      termInstance.write(event.data);
+    } else {
+      termInstance.write(new Uint8Array(event.data));
+    }
+  };
+
+  termWs.onclose = () => {
+    setTerminalStatus('disconnected', 'Disconnected');
+    if (termInstance) {
+      termInstance.writeln('\r\n\x1b[33m[Sesi terminal terputus]\x1b[0m\r\n');
+    }
+  };
+
+  termWs.onerror = () => {
+    setTerminalStatus('disconnected', 'Error');
+    if (termInstance) {
+      termInstance.writeln('\r\n\x1b[31m[Koneksi WebSocket gagal atau terputus]\x1b[0m\r\n');
+    }
+  };
+}
+
+function setTerminalStatus(state, label) {
+  const pill = document.getElementById('terminal-status-pill');
+  if (!pill) return;
+  pill.className = `status-pill ${state}`;
+  pill.textContent = label;
+}
+
+function closeTerminalSession(clearScreen = true) {
+  if (termWs) {
+    try {
+      termWs.close();
+    } catch (_) {}
+    termWs = null;
+  }
+  if (clearScreen && termInstance) {
+    termInstance.reset();
+  }
+}
+
+function reopenShellSelection() {
+  if (!activeTerminalContainerId) return;
+  closeModal('modal-terminal');
+  openTerminal(activeTerminalContainerId, activeTerminalContainerName);
+}
+
+function clearInteractiveTerminal() {
+  if (termInstance) {
+    termInstance.clear();
+    termInstance.focus();
+  }
+}
+
+function reconnectTerminal() {
+  if (activeTerminalContainerId) {
+    startInteractiveTerminal(activeTerminalContainerId, activeTerminalContainerName, activeTerminalShell);
+  }
+}
+
+function sendQuickCommand(cmd) {
+  if (termWs && termWs.readyState === WebSocket.OPEN) {
+    termWs.send(JSON.stringify({ type: 'input', data: cmd }));
+    if (termInstance) termInstance.focus();
+  } else {
+    showToast('Terminal belum terhubung', 'warning');
   }
 }
 
@@ -1170,9 +1285,9 @@ function closeModal(modalId) {
     activeLogsContainerId = null;
   }
   if (modalId === 'modal-terminal') {
+    closeTerminalSession(false);
     activeTerminalContainerId = null;
     activeTerminalContainerName = '';
-    isTerminalRunning = false;
   }
 }
 

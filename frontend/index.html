@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DockLite - Lightweight Docker Manager</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/xterm.css">
 </head>
 <body>
   <div class="app-layout">
@@ -572,54 +573,100 @@
     </div>
   </div>
 
-  <!-- Modal: Terminal / Exec -->
-  <div class="modal-backdrop" id="modal-terminal">
-    <div class="modal modal-lg modal-terminal">
+  <!-- Modal: Terminal Shell Selector (Tanya Shell di Awal) -->
+  <div class="modal-backdrop" id="modal-terminal-shell">
+    <div class="modal modal-shell-select">
       <div class="modal-header">
         <div class="terminal-title-wrap">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: #3fb950; margin-right: 6px;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: #3fb950; margin-right: 8px;">
+            <polyline points="4 17 10 11 4 5"></polyline>
+            <line x1="12" y1="19" x2="20" y2="19"></line>
+          </svg>
+          <h3 id="shell-picker-title">Pilih Shell Terminal</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-terminal-shell')">&times;</button>
+      </div>
+      <form id="form-shell-select" onsubmit="handleShellSelectSubmit(event)">
+        <div class="modal-body">
+          <p class="shell-picker-desc">
+            Pilih shell yang ingin digunakan untuk sesi terminal interaktif pada container <strong id="shell-picker-cname">...</strong>:
+          </p>
+
+          <div class="shell-preset-grid">
+            <div class="shell-preset-card active" data-shell="/bin/sh" onclick="selectPresetShell('/bin/sh')" ondblclick="confirmStartTerminal()">
+              <div class="preset-badge">Universal</div>
+              <div class="preset-name">/bin/sh</div>
+              <div class="preset-desc">POSIX Standard. Tersedia di hampir seluruh container Linux & Alpine.</div>
+            </div>
+
+            <div class="shell-preset-card" data-shell="/bin/bash" onclick="selectPresetShell('/bin/bash')" ondblclick="confirmStartTerminal()">
+              <div class="preset-badge">Populer</div>
+              <div class="preset-name">/bin/bash</div>
+              <div class="preset-desc">Bourne Again Shell. Cocok untuk Ubuntu, Debian, CentOS.</div>
+            </div>
+
+            <div class="shell-preset-card" data-shell="/bin/ash" onclick="selectPresetShell('/bin/ash')" ondblclick="confirmStartTerminal()">
+              <div class="preset-badge">Alpine</div>
+              <div class="preset-name">/bin/ash</div>
+              <div class="preset-desc">Almquist Shell. Shell default pada image Alpine Linux.</div>
+            </div>
+
+            <div class="shell-preset-card" data-shell="/bin/zsh" onclick="selectPresetShell('/bin/zsh')" ondblclick="confirmStartTerminal()">
+              <div class="preset-badge">Zsh</div>
+              <div class="preset-name">/bin/zsh</div>
+              <div class="preset-desc">Z Shell. Jika terpasang di container.</div>
+            </div>
+          </div>
+
+          <div class="form-group custom-shell-group" style="margin-top: 18px;">
+            <label for="terminal-custom-shell-input">Atau Jalankan Shell / Command Kustom:</label>
+            <input type="text" id="terminal-custom-shell-input" class="terminal-custom-shell-input" placeholder="e.g. /bin/sh, /bin/bash, powershell, python" value="/bin/sh" autocomplete="off" spellcheck="false">
+            <small>Ketik path executable / command lalu tekan Enter atau klik Buka Terminal.</small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-terminal-shell')">Batal</button>
+          <button type="submit" class="btn btn-primary" id="btn-start-terminal">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Buka Terminal
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Interactive Terminal (xterm.js + WebSocket) -->
+  <div class="modal-backdrop" id="modal-terminal">
+    <div class="modal modal-terminal">
+      <div class="modal-header">
+        <div class="terminal-title-wrap">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: #3fb950; margin-right: 8px;">
             <polyline points="4 17 10 11 4 5"></polyline>
             <line x1="12" y1="19" x2="20" y2="19"></line>
           </svg>
           <h3 id="terminal-modal-title">Container Terminal</h3>
+          <span id="terminal-status-pill" class="status-pill connecting">Connecting...</span>
+          <span id="terminal-shell-badge" class="terminal-shell-badge">Shell: /bin/sh</span>
         </div>
         <div class="terminal-header-controls">
-          <div class="shell-picker">
-            <label for="terminal-shell-select">Shell:</label>
-            <select id="terminal-shell-select" onchange="handleShellChange()">
-              <option value="/bin/sh" selected>/bin/sh</option>
-              <option value="/bin/bash">/bin/bash</option>
-              <option value="/bin/ash">/bin/ash</option>
-              <option value="custom">Custom...</option>
-            </select>
-            <input type="text" id="terminal-custom-shell" class="hidden" placeholder="e.g. /bin/zsh" value="">
-          </div>
-          <button class="btn btn-sm btn-secondary" onclick="clearTerminal()" title="Clear terminal">Clear</button>
+          <button class="btn btn-sm btn-secondary" onclick="reopenShellSelection()" title="Ganti shell atau command">Ganti Shell</button>
+          <button class="btn btn-sm btn-secondary" onclick="clearInteractiveTerminal()" title="Clear screen">Clear</button>
+          <button class="btn btn-sm btn-secondary" onclick="reconnectTerminal()" title="Reconnect session">↻ Reconnect</button>
           <button class="modal-close" onclick="closeModal('modal-terminal')">&times;</button>
         </div>
       </div>
       <div class="modal-body modal-terminal-body">
         <div class="terminal-quick-bar">
           <span class="quick-cmd-label">Quick:</span>
-          <button type="button" class="btn-terminal-quick" onclick="runQuickCommand('ls -la')">ls -la</button>
-          <button type="button" class="btn-terminal-quick" onclick="runQuickCommand('ps aux || ps -ef')">ps</button>
-          <button type="button" class="btn-terminal-quick" onclick="runQuickCommand('df -h')">df -h</button>
-          <button type="button" class="btn-terminal-quick" onclick="runQuickCommand('env')">env</button>
-          <button type="button" class="btn-terminal-quick" onclick="runQuickCommand('uname -a')">uname -a</button>
-          <button type="button" class="btn-terminal-quick" onclick="runQuickCommand('cat /etc/os-release')">os-release</button>
+          <button type="button" class="btn-terminal-quick" onclick="sendQuickCommand('ls -la\n')">ls -la</button>
+          <button type="button" class="btn-terminal-quick" onclick="sendQuickCommand('ps aux || ps -ef\n')">ps</button>
+          <button type="button" class="btn-terminal-quick" onclick="sendQuickCommand('df -h\n')">df -h</button>
+          <button type="button" class="btn-terminal-quick" onclick="sendQuickCommand('env\n')">env</button>
+          <button type="button" class="btn-terminal-quick" onclick="sendQuickCommand('uname -a\n')">uname -a</button>
+          <button type="button" class="btn-terminal-quick" onclick="sendQuickCommand('cat /etc/os-release\n')">os-release</button>
+          <button type="button" class="btn-terminal-quick" onclick="sendQuickCommand('\x03')" title="Ctrl+C (Kirim sinyal Interrupt)">Ctrl+C</button>
         </div>
-        <div id="terminal-screen" class="terminal-screen">
-          <div class="terminal-line terminal-system">Welcome to DockLite Container Terminal</div>
-          <div class="terminal-line terminal-system">Select a shell (/bin/sh, /bin/bash, /bin/ash, or custom) and type commands below.</div>
-        </div>
-        <form id="terminal-form" onsubmit="handleTerminalSubmit(event)" class="terminal-input-bar">
-          <span id="terminal-prompt" class="terminal-prompt">root@container:/#</span>
-          <input type="text" id="terminal-input" class="terminal-input" placeholder="Type command and press Enter..." autocomplete="off" spellcheck="false" required>
-          <button type="submit" id="btn-terminal-run" class="btn btn-primary btn-sm">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            Run
-          </button>
-        </form>
+        <div id="terminal-xterm-container" class="terminal-xterm-container"></div>
       </div>
     </div>
   </div>
@@ -627,6 +674,8 @@
   <!-- Toast Container -->
   <div id="toast-container"></div>
 
+  <script src="/xterm.js"></script>
+  <script src="/xterm-addon-fit.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
